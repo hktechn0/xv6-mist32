@@ -4,7 +4,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "defs.h"
-#include "x86.h"
+#include "mist32.h"
 #include "elf.h"
 
 int
@@ -12,7 +12,7 @@ exec(char *path, char **argv)
 {
   char *s, *last;
   int i, off;
-  uint argc, sz, sp, ustack[3+MAXARG+1];
+  uint argc, sz, sp, ustack[MAXARG+1];
   struct elfhdr elf;
   struct inode *ip;
   struct proghdr ph;
@@ -64,31 +64,31 @@ exec(char *path, char **argv)
     sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
     if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
       goto bad;
-    ustack[3+argc] = sp;
+    ustack[argc] = sp;
   }
-  ustack[3+argc] = 0;
+  ustack[argc] = 0;
 
-  ustack[0] = 0xffffffff;  // fake return PC
-  ustack[1] = argc;
-  ustack[2] = sp - (argc+1)*4;  // argv pointer
+  proc()->tf->rret = 0xffffffff;  // fake return PC
+  proc()->tf->r1 = argc;
+  proc()->tf->r2 = sp - (argc+1)*4;  // argv pointer
 
-  sp -= (3+argc+1) * 4;
-  if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
+  sp -= (argc+1) * 4;
+  if(copyout(pgdir, sp, ustack, (argc+1)*4) < 0)
     goto bad;
 
   // Save program name for debugging.
   for(last=s=path; *s; s++)
     if(*s == '/')
       last = s+1;
-  safestrcpy(proc->name, last, sizeof(proc->name));
+  safestrcpy(proc()->name, last, sizeof(proc()->name));
 
   // Commit to the user image.
-  oldpgdir = proc->pgdir;
-  proc->pgdir = pgdir;
-  proc->sz = sz;
-  proc->tf->eip = elf.entry;  // main
-  proc->tf->esp = sp;
-  switchuvm(proc);
+  oldpgdir = proc()->pgdir;
+  proc()->pgdir = pgdir;
+  proc()->sz = sz;
+  proc()->tf->ppcr = elf.entry;  // main
+  proc()->tf->uspr = sp;
+  switchuvm(proc());
   freevm(oldpgdir);
   return 0;
 

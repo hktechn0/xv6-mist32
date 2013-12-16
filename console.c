@@ -2,6 +2,8 @@
 // Input is from the keyboard or serial port.
 // Output is written to the screen and serial port.
 
+#include <stdarg.h>
+
 #include "types.h"
 #include "defs.h"
 #include "param.h"
@@ -12,7 +14,7 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
-#include "x86.h"
+#include "mist32.h"
 
 static void consputc(int);
 
@@ -54,8 +56,8 @@ void
 cprintf(char *fmt, ...)
 {
   int i, c, locking;
-  uint *argp;
   char *s;
+  va_list args;
 
   locking = cons.locking;
   if(locking)
@@ -64,7 +66,8 @@ cprintf(char *fmt, ...)
   if (fmt == 0)
     panic("null fmt");
 
-  argp = (uint*)(void*)(&fmt + 1);
+  va_start(args, fmt);
+
   for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
     if(c != '%'){
       consputc(c);
@@ -75,14 +78,14 @@ cprintf(char *fmt, ...)
       break;
     switch(c){
     case 'd':
-      printint(*argp++, 10, 1);
+      printint(va_arg(args, int), 10, 1);
       break;
     case 'x':
     case 'p':
-      printint(*argp++, 16, 0);
+      printint(va_arg(args, uint), 16, 0);
       break;
     case 's':
-      if((s = (char*)*argp++) == 0)
+      if((s = va_arg(args, char*)) == 0)
         s = "(null)";
       for(; *s; s++)
         consputc(*s);
@@ -98,6 +101,8 @@ cprintf(char *fmt, ...)
     }
   }
 
+  va_end(args);
+
   if(locking)
     release(&cons.lock);
 }
@@ -107,13 +112,14 @@ panic(char *s)
 {
   int i;
   uint pcs[10];
-  
-  cli();
+
+  srieiw_disable();
   cons.locking = 0;
-  cprintf("cpu%d: panic: ", cpu->id);
+  cprintf("cpu%d: panic: ", cpu()->id);
+  cprintf("panic: ");
   cprintf(s);
   cprintf("\n");
-  getcallerpcs(&s, pcs);
+  /*getcallerpcs(&s, pcs);*/
   for(i=0; i<10; i++)
     cprintf(" %p", pcs[i]);
   panicked = 1; // freeze other CPU
@@ -124,11 +130,12 @@ panic(char *s)
 //PAGEBREAK: 50
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
-static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
+//static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
 static void
 cgaputc(int c)
 {
+/*
   int pos;
   
   // Cursor position: col + 80*row.
@@ -155,13 +162,14 @@ cgaputc(int c)
   outb(CRTPORT, 15);
   outb(CRTPORT+1, pos);
   crt[pos] = ' ' | 0x0700;
+*/
 }
 
 void
 consputc(int c)
 {
   if(panicked){
-    cli();
+    srieiw_disable();
     for(;;)
       ;
   }
@@ -235,7 +243,7 @@ consoleread(struct inode *ip, char *dst, int n)
   acquire(&input.lock);
   while(n > 0){
     while(input.r == input.w){
-      if(proc->killed){
+      if(proc()->killed){
         release(&input.lock);
         ilock(ip);
         return -1;
@@ -287,7 +295,7 @@ consoleinit(void)
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
 
-  picenable(IRQ_KBD);
-  ioapicenable(IRQ_KBD, 0);
+  idtenable(IRQ_KMC);
+  /* ioapicenable(IRQ_KBD, 0); */
 }
 

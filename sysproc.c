@@ -1,5 +1,5 @@
 #include "types.h"
-#include "x86.h"
+#include "mist32.h"
 #include "defs.h"
 #include "param.h"
 #include "memlayout.h"
@@ -38,7 +38,7 @@ sys_kill(void)
 int
 sys_getpid(void)
 {
-  return proc->pid;
+  return proc()->pid;
 }
 
 int
@@ -49,7 +49,7 @@ sys_sbrk(void)
 
   if(argint(0, &n) < 0)
     return -1;
-  addr = proc->sz;
+  addr = proc()->sz;
   if(growproc(n) < 0)
     return -1;
   return addr;
@@ -66,7 +66,7 @@ sys_sleep(void)
   acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){
-    if(proc->killed){
+    if(proc()->killed){
       release(&tickslock);
       return -1;
     }

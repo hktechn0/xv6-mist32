@@ -6,6 +6,7 @@
         .word 0, 0;                                             \
         .byte 0, 0, 0, 0
 
+/*
 // The 0xC0 means the limit is in 4096-byte units
 // and (for executable segments) 32-bit mode.
 #define SEG_ASM(type,base,lim)                                  \
@@ -19,3 +20,4 @@
 #define STA_W     0x2       // Writeable (non-executable segments)
 #define STA_R     0x2       // Readable (executable segments)
 #define STA_A     0x1       // Accessed
+*/

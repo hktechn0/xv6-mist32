@@ -56,11 +56,6 @@ void            ideinit(void);
 void            ideintr(void);
 void            iderw(struct buf*);
 
-// ioapic.c
-void            ioapicenable(int irq, int cpu);
-extern uchar    ioapicid;
-void            ioapicinit(void);
-
 // kalloc.c
 char*           kalloc(void);
 void            kfree(char*);
@@ -73,10 +68,7 @@ void            kbdintr(void);
 // lapic.c
 int             cpunum(void);
 extern volatile uint*    lapic;
-void            lapiceoi(void);
 void            lapicinit(void);
-void            lapicstartap(uchar, uint);
-void            microdelay(int);
 
 // log.c
 void            initlog(void);
@@ -89,10 +81,6 @@ extern int      ismp;
 int             mpbcpu(void);
 void            mpinit(void);
 void            mpstartthem(void);
-
-// picirq.c
-void            picenable(int);
-void            picinit(void);
 
 // pipe.c
 int             pipealloc(struct file**, struct file**);
@@ -148,9 +136,11 @@ void            syscall(void);
 
 // timer.c
 void            timerinit(void);
+void            timereoi(void);
 
 // trap.c
 void            idtinit(void);
+void            idtenable(int irq);
 extern uint     ticks;
 void            tvinit(void);
 extern struct spinlock tickslock;

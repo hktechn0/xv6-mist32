@@ -3,7 +3,7 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
-#include "x86.h"
+#include "mist32.h"
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
@@ -31,11 +31,11 @@ acquire(struct spinlock *lk)
   // The xchg is atomic.
   // It also serializes, so that reads after acquire are not
   // reordered before it. 
-  while(xchg(&lk->locked, 1) != 0)
+  while(tas(&lk->locked) != 0)
     ;
 
   // Record info about lock acquisition for debugging.
-  lk->cpu = cpu;
+  lk->cpu = cpu();
   getcallerpcs(&lk, lk->pcs);
 }
 
@@ -58,7 +58,8 @@ release(struct spinlock *lk)
   // after a store. So lock->locked = 0 would work here.
   // The xchg being asm volatile ensures gcc emits it after
   // the above assignments (and after the critical section).
-  xchg(&lk->locked, 0);
+  /* xchg(&lk->locked, 0); */
+  lk->locked = 0;
 
   popcli();
 }
@@ -67,6 +68,7 @@ release(struct spinlock *lk)
 void
 getcallerpcs(void *v, uint pcs[])
 {
+/*
   uint *ebp;
   int i;
   
@@ -79,13 +81,19 @@ getcallerpcs(void *v, uint pcs[])
   }
   for(; i < 10; i++)
     pcs[i] = 0;
+*/
+
+  int i;
+
+  for(i = 0; i < 10; i++)
+    pcs[i] = 0;
 }
 
 // Check whether this cpu is holding the lock.
 int
 holding(struct spinlock *lock)
 {
-  return lock->locked && lock->cpu == cpu;
+  return lock->locked && lock->cpu == cpu();
 }
 
 
@@ -96,22 +104,19 @@ holding(struct spinlock *lock)
 void
 pushcli(void)
 {
-  int eflags;
-  
-  eflags = readeflags();
-  cli();
-  if(cpu->ncli++ == 0)
-    cpu->intena = eflags & FL_IF;
+  srieiw_disable();
+  if(cpu()->ncli++ == 0)
+    cpu()->intena = srieir();
 }
 
 void
 popcli(void)
 {
-  if(readeflags()&FL_IF)
+  if(srieir())
     panic("popcli - interruptible");
-  if(--cpu->ncli < 0)
+  if(--cpu()->ncli < 0)
     panic("popcli");
-  if(cpu->ncli == 0 && cpu->intena)
-    sti();
+  if(cpu()->ncli == 0 && cpu()->intena)
+    srieiw_enable();
 }
 

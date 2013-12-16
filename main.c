@@ -4,7 +4,7 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
-#include "x86.h"
+#include "mist32.h"
 
 static void startothers(void);
 static void mpmain(void)  __attribute__((noreturn));
@@ -22,9 +22,9 @@ main(void)
   mpinit();        // collect info about this machine
   lapicinit();
   seginit();       // set up segments
-  cprintf("\ncpu%d: starting xv6\n\n", cpu->id);
-  picinit();       // interrupt controller
-  ioapicinit();    // another interrupt controller
+  cprintf("\ncpu%d: starting xv6\n\n", cpu()->id);
+  /* picinit();       // interrupt controller */
+  /* ioapicinit();    // another interrupt controller */
   consoleinit();   // I/O devices & their interrupts
   uartinit();      // serial port
   pinit();         // process table
@@ -43,6 +43,7 @@ main(void)
 }
 
 // Other CPUs jump here from entryother.S.
+/*
 static void
 mpenter(void)
 {
@@ -51,14 +52,16 @@ mpenter(void)
   lapicinit();
   mpmain();
 }
+*/
 
 // Common CPU setup code.
 static void
 mpmain(void)
 {
-  cprintf("cpu%d: starting\n", cpu->id);
+  cprintf("cpu%d: starting\n", cpu()->id);
   idtinit();       // load idt register
-  xchg(&cpu->started, 1); // tell startothers() we're up
+  /* xchg(&cpu->started, 1); // tell startothers() we're up */
+  cpu()->started = 1; // tell startothers() we're up
   scheduler();     // start running processes
 }
 
@@ -68,6 +71,7 @@ pde_t entrypgdir[];  // For entry.S
 static void
 startothers(void)
 {
+/*
   extern uchar _binary_entryother_start[], _binary_entryother_size[];
   uchar *code;
   struct cpu *c;
@@ -97,6 +101,7 @@ startothers(void)
     while(c->started == 0)
       ;
   }
+*/
 }
 
 // Boot page table used in entry.S and entryother.S.
@@ -106,9 +111,9 @@ startothers(void)
 __attribute__((__aligned__(PGSIZE)))
 pde_t entrypgdir[NPDENTRIES] = {
   // Map VA's [0, 4MB) to PA's [0, 4MB)
-  [0] = (0) | PTE_P | PTE_W | PTE_PS,
+  [0] = (0) | PTE_V | PTE_PP_RWXX | PTE_PE,
   // Map VA's [KERNBASE, KERNBASE+4MB) to PA's [0, 4MB)
-  [KERNBASE>>PDXSHIFT] = (0) | PTE_P | PTE_W | PTE_PS,
+  [KERNBASE>>PDXSHIFT] = (0) | PTE_V | PTE_PP_RWXX | PTE_PE,
 };
 
 //PAGEBREAK!

@@ -1,5 +1,4 @@
 #include "types.h"
-#include "x86.h"
 #include "defs.h"
 #include "kbd.h"
 
@@ -12,10 +11,12 @@ kbdgetc(void)
   };
   uint st, data, c;
 
-  st = inb(KBSTATP);
+  /* st = inb(KBSTATP); */
+  st = 0;
   if((st & KBS_DIB) == 0)
     return -1;
-  data = inb(KBDATAP);
+  /* data = inb(KBDATAP); */
+  data = 0;
 
   if(data == 0xE0){
     shift |= E0ESC;

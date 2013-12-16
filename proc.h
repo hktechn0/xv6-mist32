@@ -1,12 +1,9 @@
-// Segments in proc->gdt.
-#define NSEGS     7
-
 // Per-CPU state
 struct cpu {
   uchar id;                    // Local APIC ID; index into cpus[] below
   struct context *scheduler;   // swtch() here to enter scheduler
-  struct taskstate ts;         // Used by x86 to find stack for interrupt
-  struct segdesc gdt[NSEGS];   // x86 global descriptor table
+//  struct taskstate ts;         // Used by x86 to find stack for interrupt
+//  struct segdesc gdt[NSEGS];   // x86 global descriptor table
   volatile uint started;       // Has the CPU started?
   int ncli;                    // Depth of pushcli nesting.
   int intena;                  // Were interrupts enabled before pushcli?
@@ -21,14 +18,39 @@ extern int ncpu;
 
 // Per-CPU variables, holding pointers to the
 // current cpu and to the current process.
-// The asm suffix tells gcc to use "%gs:0" to refer to cpu
-// and "%gs:4" to refer to proc.  seginit sets up the
-// %gs segment register so that %gs refers to the memory
-// holding those two variables in the local cpu's struct cpu.
-// This is similar to how thread-local variables are implemented
-// in thread libraries such as Linux pthreads.
-extern struct cpu *cpu asm("%gs:0");       // &cpus[cpunum()]
-extern struct proc *proc asm("%gs:4");     // cpus[cpunum()].proc
+static inline struct cpu* volatile cpu(void)
+{
+  struct cpu* volatile p;
+
+  asm volatile("ld32 %0, rglobl" : "=r"(p));
+
+  return p;
+}
+
+static inline void cpu_set(struct cpu* volatile p)
+{
+  asm volatile("st32 %0, rglobl" : : "r"(p) : "memory");
+}
+
+static inline struct proc* volatile proc(void)
+{
+  struct proc* volatile p;
+
+  asm volatile("move %0, rglobl\n"
+               "add %0, 4\n"
+               "ld32 %0, %0" : "=r"(p));
+
+  return p;
+}
+
+static inline void proc_set(struct proc* volatile p)
+{
+  void* volatile tmp;
+
+  asm volatile("move %0, rglobl\n"
+               "add %0, 4" : "=r"(tmp));
+  asm volatile("st32 %1, %0" : : "r"(tmp), "r"(p) : "memory");
+}
 
 //PAGEBREAK: 17
 // Saved registers for kernel context switches.
@@ -42,11 +64,31 @@ extern struct proc *proc asm("%gs:4");     // cpus[cpunum()].proc
 // at the "Switch stacks" comment. Switch doesn't save eip explicitly,
 // but it is on the stack and allocproc() manipulates it.
 struct context {
-  uint edi;
-  uint esi;
-  uint ebx;
-  uint ebp;
-  uint eip;
+  uint rret;
+  uint rbase;
+  // uint r29; // cpu-local pointer
+  uint r28;
+  uint r27;
+  uint r26;
+  uint r25;
+  uint r24;
+  uint r23;
+  uint r22;
+  uint r21;
+  uint r20;
+  uint r19;
+  uint r18;
+  uint r17;
+  uint r16;
+  uint r15;
+  uint r14;
+  uint r13;
+  uint r12;
+  uint r11;
+  uint r10;
+  uint r9;
+  uint r8;
+  uint return_to;
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };

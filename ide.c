@@ -6,7 +6,6 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
-#include "x86.h"
 #include "traps.h"
 #include "spinlock.h"
 #include "buf.h"
@@ -22,13 +21,15 @@
 // idequeue points to the buf now being read/written to the disk.
 // idequeue->qnext points to the next buf to be processed.
 // You must hold idelock while manipulating queue.
-
+/*
 static struct spinlock idelock;
 static struct buf *idequeue;
 
 static int havedisk1;
 static void idestart(struct buf*);
+*/
 
+/*
 // Wait for IDE disk to become ready.
 static int
 idewait(int checkerr)
@@ -41,10 +42,12 @@ idewait(int checkerr)
     return -1;
   return 0;
 }
+*/
 
 void
 ideinit(void)
 {
+/*
   int i;
 
   initlock(&idelock, "ide");
@@ -63,8 +66,10 @@ ideinit(void)
   
   // Switch back to disk 0.
   outb(0x1f6, 0xe0 | (0<<4));
+*/
 }
 
+/*
 // Start the request for b.  Caller must hold idelock.
 static void
 idestart(struct buf *b)
@@ -86,11 +91,13 @@ idestart(struct buf *b)
     outb(0x1f7, IDE_CMD_READ);
   }
 }
+*/
 
 // Interrupt handler.
 void
 ideintr(void)
 {
+/*
   struct buf *b;
 
   // First queued buffer is the active request.
@@ -116,6 +123,7 @@ ideintr(void)
     idestart(idequeue);
 
   release(&idelock);
+*/
 }
 
 //PAGEBREAK!
@@ -125,6 +133,7 @@ ideintr(void)
 void
 iderw(struct buf *b)
 {
+/*
   struct buf **pp;
 
   if(!(b->flags & B_BUSY))
@@ -152,4 +161,5 @@ iderw(struct buf *b)
   }
 
   release(&idelock);
+*/
 }
