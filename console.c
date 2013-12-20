@@ -116,7 +116,6 @@ panic(char *s)
   srieiw_disable();
   cons.locking = 0;
   cprintf("cpu%d: panic: ", cpu()->id);
-  cprintf("panic: ");
   cprintf(s);
   cprintf("\n");
   /*getcallerpcs(&s, pcs);*/

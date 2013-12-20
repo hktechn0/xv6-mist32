@@ -118,7 +118,7 @@ trap(struct trapframe *tf)
    
   //PAGEBREAK: 13
   default:
-    if(proc() == 0 || (tf->ppcr&3) == 0){
+    if(proc() == 0 || !(tf->ppsr & PSR_CMOD_USER)){
       // In kernel, it must be our mistake.
       cprintf("unexpected trap %d from cpu %d pc %x (fi0r=0x%x)\n",
               tf->trapno, cpu()->id, tf->ppcr, srfi0r());

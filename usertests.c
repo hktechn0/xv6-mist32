@@ -1351,7 +1351,7 @@ sbrktest(void)
   wait();
 
   // can one grow address space to something big?
-#define BIG (10*1024*1024)
+#define BIG (100*1024*1024)
   a = sbrk(0);
   amt = (BIG) - (uint)a;
   p = sbrk(amt);
@@ -1451,20 +1451,9 @@ sbrktest(void)
 void
 validateint(int *p)
 {
-/*
-  int res;
-  asm("mov %%esp, %%ebx\n\t"
-      "mov %3, %%esp\n\t"
-      "int %2\n\t"
-      "mov %%ebx, %%esp" :
-      "=a" (res) :
-      "a" (SYS_sleep), "n" (T_SYSCALL), "c" (p) :
-      "ebx");
-*/
-
   asm("srspr r28\n\t"
       "srspw %2\n\t"
-      "lil r0, %1\n\t"
+      "lil r0, %0\n\t"
       "swi %1\n\t"
       "srspw r28" ::
       "n" (SYS_sleep), "n" (T_SYSCALL), "r" (p) :
