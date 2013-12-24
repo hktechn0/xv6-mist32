@@ -111,9 +111,9 @@ startothers(void)
 __attribute__((__aligned__(PGSIZE)))
 pde_t entrypgdir[NPDENTRIES] = {
   // Map VA's [0, 4MB) to PA's [0, 4MB)
-  [0] = (0) | PTE_V | PTE_PP_RWXX | PTE_PE,
+  [0] = (0) | PTE_V | PTE_PP_RWXX | PTE_EX | PTE_PE,
   // Map VA's [KERNBASE, KERNBASE+4MB) to PA's [0, 4MB)
-  [KERNBASE>>PDXSHIFT] = (0) | PTE_V | PTE_PP_RWXX | PTE_PE,
+  [KERNBASE>>PDXSHIFT] = (0) | PTE_V | PTE_PP_RWXX | PTE_EX | PTE_PE,
 };
 
 //PAGEBREAK!

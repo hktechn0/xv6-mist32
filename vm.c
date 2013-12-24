@@ -51,7 +51,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
     // The permissions here are overly generous, but they can
     // be further restricted by the permissions in the page table 
     // entries, if necessary.
-    *pde = v2p(pgtab) | PTE_V | PTE_PP_RWRW;
+    *pde = v2p(pgtab) | PTE_V | PTE_PP_RWRW | PTE_EX;
   }
   return &pgtab[PTX(va)];
 }
@@ -176,7 +176,7 @@ inituvm(pde_t *pgdir, char *init, uint sz)
     panic("inituvm: more than a page");
   mem = kalloc();
   memset(mem, 0, PGSIZE);
-  mappages(pgdir, 0, PGSIZE, v2p(mem), PTE_PP_RWRW);
+  mappages(pgdir, 0, PGSIZE, v2p(mem), PTE_PP_RWRW | PTE_EX);
   memmove(mem, init, sz);
 }
 
@@ -226,7 +226,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     memset(mem, 0, PGSIZE);
-    mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_PP_RWRW);
+    mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTE_PP_RWRW | PTE_EX);
   }
   return newsz;
 }
