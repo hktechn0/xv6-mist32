@@ -1,12 +1,10 @@
 // Multiprocessor support
-// Search memory for MP description structures.
-// http://developer.intel.com/design/pentium/datashts/24201606.pdf
+// mist32 is not supported multiprocessor
 
 #include "types.h"
 #include "defs.h"
 #include "param.h"
 #include "memlayout.h"
-#include "mp.h"
 #include "mmu.h"
 #include "proc.h"
 

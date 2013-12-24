@@ -42,18 +42,6 @@ main(void)
   mpmain();
 }
 
-// Other CPUs jump here from entryother.S.
-/*
-static void
-mpenter(void)
-{
-  switchkvm(); 
-  seginit();
-  lapicinit();
-  mpmain();
-}
-*/
-
 // Common CPU setup code.
 static void
 mpmain(void)
@@ -71,37 +59,7 @@ pde_t entrypgdir[];  // For entry.S
 static void
 startothers(void)
 {
-/*
-  extern uchar _binary_entryother_start[], _binary_entryother_size[];
-  uchar *code;
-  struct cpu *c;
-  char *stack;
-
-  // Write entry code to unused memory at 0x7000.
-  // The linker has placed the image of entryother.S in
-  // _binary_entryother_start.
-  code = p2v(0x7000);
-  memmove(code, _binary_entryother_start, (uint)_binary_entryother_size);
-
-  for(c = cpus; c < cpus+ncpu; c++){
-    if(c == cpus+cpunum())  // We've started already.
-      continue;
-
-    // Tell entryother.S what stack to use, where to enter, and what 
-    // pgdir to use. We cannot use kpgdir yet, because the AP processor
-    // is running in low  memory, so we use entrypgdir for the APs too.
-    stack = kalloc();
-    *(void**)(code-4) = stack + KSTACKSIZE;
-    *(void**)(code-8) = mpenter;
-    *(int**)(code-12) = (void *) v2p(entrypgdir);
-
-    lapicstartap(c->id, v2p(code));
-
-    // wait for cpu to finish mpmain()
-    while(c->started == 0)
-      ;
-  }
-*/
+  /* mist32 is not supported multiprocessor */
 }
 
 // Boot page table used in entry.S and entryother.S.
