@@ -69,8 +69,17 @@ idts(void)
 static inline uint
 srfi0r(void)
 {
-  // not implemented
-  return 0;
+  uint r;
+  asm("srfi0r %0" : : "r"(r));
+  return r;
+}
+
+static inline uint
+srfi1r(void)
+{
+  uint r;
+  asm("srfi1r %0" : : "r"(r));
+  return r;
 }
 
 static inline uint
