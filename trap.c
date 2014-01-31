@@ -107,15 +107,11 @@ trap(struct trapframe *tf)
     uartintr();
     // lapiceoi();
     break;
-/*
-  case T_IRQ0 + 7:
-  case T_IRQ0 + IRQ_SPURIOUS:
-    cprintf("cpu%d: spurious interrupt at %x\n",
-            cpu()->id, tf->ppcr);
-    // lapiceoi();
+
+  case T_PGFLT:
+    pgfault(srfi0r());
     break;
-*/
-   
+
   //PAGEBREAK: 13
   default:
     if(proc() == 0 || !(tf->ppsr & PSR_CMOD_USER)){

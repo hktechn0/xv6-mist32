@@ -51,6 +51,7 @@
 #define PTE_CD          0x040   // Cache-Disable
 #define PTE_G           0x080   // Global
 #define PTE_PE          0x100   // Extended Page Size
+#define PTE_OBJ         0x800   // FlashMMU Object
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)

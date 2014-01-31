@@ -6,6 +6,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+#include "flashmmu.h"
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -113,6 +114,8 @@ static struct kmap {
   { (void*)KERNBASE, 0,             EXTMEM,    PTE_PP_RWXX},             // I/O space
   { (void*)KERNLINK, V2P(KERNLINK), V2P(data), PTE_PP_RDXX | PTE_EX},    // kern text+rodata
   { (void*)data,     V2P(data),     PHYSTOP,   PTE_PP_RWXX},             // kern data+memory
+  { (void*)FMMUVIRT, FMMUSTART,     FMMUPBEND, PTE_PP_RWRW},             // Flash MMU PageBuffer
+  { (void*)FMMUOBJC, FMMUPBEND,     FMMUEND,   PTE_PP_RWXX},             // Flash MMU
   { (void*)DEVSPACE, DEVSPACE,      0,         PTE_PP_RWXX},             // I/O space
 };
 
@@ -178,6 +181,9 @@ inituvm(pde_t *pgdir, char *init, uint sz)
   memset(mem, 0, PGSIZE);
   mappages(pgdir, 0, PGSIZE, v2p(mem), PTE_PP_RWRW | PTE_EX);
   memmove(mem, init, sz);
+
+  // Initialize object memory
+  omap_init();
 }
 
 // Load a program segment into pgdir.  addr must be page-aligned
@@ -251,10 +257,16 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       a += (NPTENTRIES - 1) * PGSIZE;
     else if((*pte & PTE_V) != 0){
       pa = PTE_ADDR(*pte);
-      if(pa == 0)
-        panic("kfree");
-      char *v = p2v(pa);
-      kfree(v);
+
+      if(*pte & PTE_OBJ)
+        omap_objfree(FLASHMMU_OBJID(pa));
+      else {
+        if(pa == 0)
+          panic("kfree");
+        char *v = p2v(pa);
+        kfree(v);
+      }
+
       *pte = 0;
     }
   }
@@ -363,5 +375,77 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
     buf += n;
     va = va0 + PGSIZE;
   }
+  return 0;
+}
+
+//
+// FLASH MMU ALLOC
+//
+
+void
+pgfault(uint vaddr)
+{
+  pte_t *pte;
+  uint objid;
+
+  if(!vaddr) {
+    panic("pgfault");
+  }
+
+  pte = walkpgdir(proc()->pgdir, (void *)vaddr, 0);
+
+  // is valid object?
+  if(!(*pte & PTE_V) || !(*pte & PTE_OBJ)) {
+    cprintf("unexpected page fault: %x %x\n", vaddr, *pte);
+    panic("pgfault");
+  }
+
+  objid = FLASHMMU_OBJID(PTE_ADDR(*pte));
+  omap_pgfault(objid);
+}
+
+int
+omap_alloc(int size)
+{
+  pte_t *pte;
+  uint objid;
+  char *p;
+
+  if(size <= 0)
+    return -1;
+
+  objid = omap_objalloc(size);
+
+  // mappages
+  for(p = (char *)0x80000000 - PGSIZE; ; p -= PGSIZE) {
+    pte = walkpgdir(proc()->pgdir, p, 0);
+    if(!(*pte & PTE_V)) {
+      mappages(proc()->pgdir, p, PGSIZE, FLASHMMU_ADDR(objid), PTE_V | PTE_OBJ | PTE_PP_RWRW);
+      break;
+    }
+  }
+
+  return (int)p;
+}
+
+int
+omap_free(uint vaddr)
+{
+  uint objid;
+  pte_t *pte;
+
+  pte = walkpgdir(proc()->pgdir, (void *)vaddr, 0);
+
+  if((*pte & PTE_V) && (*pte & PTE_OBJ)) {
+    objid = FLASHMMU_OBJID(PTE_ADDR(*pte));
+    omap_objfree(objid);
+
+    // unmappages
+    *pte = 0;
+  }
+  else {
+    panic("omap_free");
+  }
+
   return 0;
 }

@@ -25,6 +25,7 @@ OBJS = \
 	uart.o\
 	vectors.o\
 	vm.o\
+	flashmmu.o\
 
 # Cross-compiling
 TOOLPREFIX = mist32-elf-
@@ -95,7 +96,7 @@ tags: $(OBJS) entryother.S _init
 vectors.S: vectors.pl
 	perl vectors.pl > vectors.S
 
-ULIB = ulib.o usys.o printf.o umalloc.o
+ULIB = ulib.o usys.o printf.o umalloc.o uoalloc.o
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
@@ -133,6 +134,7 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
+	_omap\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)

@@ -56,6 +56,28 @@ sys_sbrk(void)
 }
 
 int
+sys_omap(void)
+{
+  int n, nbytes;
+
+  if(argint(0, &n) < 0 || argint(1, &nbytes) < 0)
+    return -1;
+
+  return omap_alloc(nbytes);
+}
+
+int
+sys_ounmap(void)
+{
+  int vaddr;
+
+  if(argint(0, &vaddr) < 0)
+    return -1;
+
+  return omap_free((uint)vaddr);
+}
+
+int
 sys_sleep(void)
 {
   int n;

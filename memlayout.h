@@ -4,6 +4,12 @@
 #define PHYSTOP 0x8000000           // Top physical memory
 #define DEVSPACE 0xFE000000         // Other devices are at high addresses
 
+#define FMMUSTART 0x80000000
+#define FMMUPBEND (FMMUSTART + FLASHMMU_PAGEBUF_SIZE)
+#define FMMUEND (FMMUSTART+0x10000000)
+#define FMMUVIRT 0xa0000000
+#define FMMUOBJC (FMMUVIRT + FLASHMMU_PAGEBUF_SIZE)
+
 // Key addresses for address space layout (see kmap in vm.c for layout)
 #define KERNBASE 0x80000000         // First kernel virtual address
 #define KERNLINK (KERNBASE+EXTMEM)  // Address where kernel is linked

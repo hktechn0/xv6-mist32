@@ -22,6 +22,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int omap(uint n, int nbytes);
+int ounmap(void *p);
 
 // ulib.c
 int stat(char*, struct stat*);
@@ -36,3 +38,6 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
+void* oalloc(uint n, uint nbytes);
+void ofree(void *p);
