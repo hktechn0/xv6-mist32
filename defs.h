@@ -171,5 +171,8 @@ void            pgfault(uint vaddr);
 int             omap_alloc(int size);
 int             omap_free(uint vaddr);
 
+// gci.c
+void            gciinit(void);
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
