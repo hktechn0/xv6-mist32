@@ -25,6 +25,7 @@ main(void)
   cprintf("\ncpu%d: starting xv6\n\n", cpu()->id);
   /* picinit();       // interrupt controller */
   /* ioapicinit();    // another interrupt controller */
+  gciinit();       // I/O bus init
   consoleinit();   // I/O devices & their interrupts
   uartinit();      // serial port
   pinit();         // process table
