@@ -5,6 +5,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "mist32.h"
+#include "flashmmu.h"
 
 static void startothers(void);
 static void mpmain(void)  __attribute__((noreturn));
@@ -34,6 +35,7 @@ main(void)
   fileinit();      // file table
   iinit();         // inode cache
   ideinit();       // disk
+  omap_init();     // object memory
   if(!ismp)
     timerinit();   // uniprocessor timer
   startothers();   // start other processors

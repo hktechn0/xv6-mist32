@@ -14,7 +14,7 @@ test_basic(uint n)
   printf(1, "Alloc %d\n", n);
 
   for(i = 0; i < n; i++) {
-    p[i] = oalloc(1, 0xff);
+    p[i] = oalloc(1, 0x8ac);
   }
 
   printf(1, "OK\n");

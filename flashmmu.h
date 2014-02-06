@@ -34,6 +34,7 @@
 #define FLASHMMU_OBJID(paddr) (paddr >> 12)
 #define FLASHMMU_OFFSET(paddr) (paddr & 0x3ff)
 #define FLASHMMU_ADDR(objid) (objid << 12)
+#define FLASHMMU_SECTOR(objid) (objid << 12 >> 9)
 #define FLASHMMU_BLOCKS(size) ((size + 511) >> 9)
 
 #define FLASHMMU_PAGEBUF_FLAGS(entry) (entry & 0x3ff)

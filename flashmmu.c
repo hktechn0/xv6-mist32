@@ -1,9 +1,11 @@
-#include "param.h"
 #include "types.h"
 #include "defs.h"
+#include "param.h"
+#include "stat.h"
 #include "mist32.h"
 #include "memlayout.h"
 #include "mmu.h"
+#include "buf.h"
 #include "flashmmu.h"
 
 // mist32 Flash MMU hardware managed area
@@ -16,11 +18,12 @@ struct flashmmu_object *omap_objects;
 
 // Flash MMU variables
 uint omap_objects_next;
-struct flashmmu_pool *omap_objcache_pool[4];
-struct flashmmu_pool *omap_pool_freelist;
+uint omap_victim_next;
+struct flashmmu_pool *omap_objcache_pool[4] = { NULL };
+struct flashmmu_pool *omap_pool_freelist = NULL;
 
-//void *omap_flash[FLASHMMU_OBJ_MAX];
-void *omap_flash[10000];
+#define OMAP_FLASH_DEV 1
+#define OMAP_FLASH_OFFSET ((1024 * 1024) >> 9)
 
 static inline struct flashmmu_pool *
 omap_pool_list_new(void)
@@ -53,38 +56,9 @@ omap_pool_list_release(struct flashmmu_pool *l)
   omap_pool_freelist = l;
 }
 
-void
-omap_init(void)
-{
-  struct flashmmu_pool *l;
-  char *p;
-
-  omap_objects_next = 0;
-
-  // set cache area
-  flashmmu_pagebuf = (char *)FMMUVIRT;
-  flashmmu_objcache = (char *)flashmmu_pagebuf + FLASHMMU_PAGEBUF_SIZE;
-
-  // init tables
-  omap_pagebuf = (uint *)((char *)flashmmu_objcache + FLASHMMU_OBJCACHE_SIZE);
-  omap_objects = (struct flashmmu_object *)((char *)omap_pagebuf + (FLASHMMU_PAGEBUF_MAX * sizeof(uint)));
-  memset((void *)omap_pagebuf, 0, FLASHMMU_PAGEBUF_MAX * sizeof(uint));
-  memset(omap_objects, 0, FLASHMMU_OBJ_MAX * sizeof(struct flashmmu_object));
-
-  // init slab
-  for(p = flashmmu_objcache; p < flashmmu_objcache + FLASHMMU_OBJCACHE_SIZE; p += 4096) {
-    // make slab
-    l = omap_pool_list_new();
-    l->p = p;
-    l->next = omap_objcache_pool[3];
-
-    // push slab
-    omap_objcache_pool[3] = l;
-  }
-}
-
 // merge sort
-struct flashmmu_pool *omap_slab_sort(struct flashmmu_pool *list)
+static struct flashmmu_pool *
+omap_slab_sort(struct flashmmu_pool *list)
 {
   struct flashmmu_pool *a, *b, *p, head;
 
@@ -143,7 +117,7 @@ struct flashmmu_pool *omap_slab_sort(struct flashmmu_pool *list)
   return head.next;
 }
 
-void
+static void
 omap_slab_make(uint pool)
 {
   struct flashmmu_pool *slab, *slab2;
@@ -169,14 +143,15 @@ omap_slab_make(uint pool)
 
     // split slab
     slab2 = omap_pool_list_new();
-    slab2->p = (char *)slab->p + ((pool + 1) << 9);
+    slab2->p = (char *)slab->p + ((1 << (pool + 1)) << 8);
 
     slab->next = omap_objcache_pool[pool];
     slab2->next = slab;
-    omap_objcache_pool[pool] = slab2;    
+    omap_objcache_pool[pool] = slab2;
     break;
   case 3:
     // sort and merge
+    // FIXME: compaction
     for(i = 0; i < 3; i++) {
       slab = omap_slab_sort(omap_objcache_pool[i]);
       omap_objcache_pool[i] = slab;
@@ -188,7 +163,7 @@ omap_slab_make(uint pool)
         }
 
         // is continuous free area?
-        if(slab->p + 1 == slab->next->p) {
+        if(slab->p + ((1 << (i + 1)) << 8) == slab->next->p) {
           slab2 = slab->next;
 
           slab->p = slab2->next->p;
@@ -197,8 +172,8 @@ omap_slab_make(uint pool)
 
           // link big slab
           slab2->p = slab->p;
-          slab2->next = omap_objcache_pool[i];
-          omap_objcache_pool[i] = slab2;
+          slab2->next = omap_objcache_pool[i + 1];
+          omap_objcache_pool[i + 1] = slab2;
         }
 
         slab = slab->next;
@@ -211,27 +186,29 @@ omap_slab_make(uint pool)
   }
 }
 
-// search slab pool. returns offset
-void *
-omap_objcache_search(uint size)
+static inline void *
+omap_objcache_alloc(uint size)
 {
+  uint i;
   struct flashmmu_pool *l;
-  char *p;
-  uint i, blocks;
+  void *p;
 
   if(!size) {
     // zero size object
     return NULL;
   }
 
-  // calc blocks
-  blocks = FLASHMMU_BLOCKS(size);
-  for(i = 0; blocks; i++) {
-    blocks >>= 1;
-  }
-  if(i > 3) {
-    panic("omap_objcache_search");
-  }
+  // calculate blocks
+  if(size <= 512)
+    i = 0;
+  else if(size <= 1024)
+    i = 1;
+  else if(size <= 2048)
+    i = 2;
+  else if(size <= 4096)
+    i = 3;
+  else
+    panic("omap_objcache_alloc");
 
   if(omap_objcache_pool[i] == NULL) {
     // cutting or merging slab
@@ -251,6 +228,69 @@ omap_objcache_search(uint size)
   omap_pool_list_release(l);
 
   return p;
+}
+
+static inline void
+omap_objcache_free(uint cache_offset, uint size)
+{
+  uint i;
+  struct flashmmu_pool *l;
+
+  if(!size) {
+    // zero size object
+    return;
+  }
+
+  // calculate blocks
+  if(size <= 512)
+    i = 0;
+  else if(size <= 1024)
+    i = 1;
+  else if(size <= 2048)
+    i = 2;
+  else if(size <= 4096)
+    i = 3;
+  else
+    panic("omap_objcache_free");
+
+  // set free pointer
+  l = omap_pool_list_new();
+  l->p = flashmmu_objcache + (cache_offset << 9);
+
+  // push slab to free pool
+  l->next = omap_objcache_pool[i];
+  omap_objcache_pool[i] = l;
+}
+
+void
+omap_init(void)
+{
+  struct flashmmu_pool *l;
+  char *p;
+
+  omap_objects_next = 0;
+  omap_victim_next = 0;
+
+  // set cache area
+  flashmmu_pagebuf = (char *)FMMUVIRT;
+  flashmmu_objcache = (char *)flashmmu_pagebuf + FLASHMMU_PAGEBUF_SIZE;
+
+  // init tables
+  omap_pagebuf = (uint *)((char *)flashmmu_objcache + FLASHMMU_OBJCACHE_SIZE);
+  omap_objects = (struct flashmmu_object *)((char *)omap_pagebuf + (FLASHMMU_PAGEBUF_MAX * sizeof(uint)));
+  memset((void *)omap_pagebuf, 0, FLASHMMU_PAGEBUF_MAX * sizeof(uint));
+  memset(omap_objects, 0, FLASHMMU_OBJ_MAX * sizeof(struct flashmmu_object));
+
+  // init slab
+  for(p = flashmmu_objcache; p < flashmmu_objcache + FLASHMMU_OBJCACHE_SIZE; p += 4096) {
+    // make slab
+    l = omap_pool_list_new();
+    l->p = p;
+
+    // push slab
+    l->next = omap_objcache_pool[3];
+    omap_objcache_pool[3] = l;
+  }
 }
 
 uint
@@ -282,9 +322,9 @@ omap_objalloc(int size)
   objid = omap_objects_next++;
 
   // alloc flash
-  if(!(omap_flash[objid] = kalloc())) {
-    panic("omap_objalloc nomem");
-  }
+  //if(!(omap_flash[objid] = kalloc())) {
+  //  panic("omap_objalloc nomem");
+  //}
 
   // set table
   omap_objects[objid].size = size;
@@ -297,70 +337,82 @@ omap_objalloc(int size)
 void
 omap_objfree(uint objid)
 {
-  struct flashmmu_pool *l;
-  uint i, blocks;
-
   if(!(omap_objects[objid].flags & FLASHMMU_FLAGS_VALID)) {
     panic("omap_objfree");
   }
 
   // free Page Buffer
-  if(omap_objects[objid].flags | FLASHMMU_FLAGS_PAGEBUF) {
+  if(omap_objects[objid].flags & FLASHMMU_FLAGS_PAGEBUF) {
     omap_pagebuf[omap_objects[objid].buf_index] = 0;
   }
 
   // free RAM object cache
-  if(omap_objects[objid].flags | FLASHMMU_FLAGS_OBJCACHE) {
-    // calculate blocks
-    blocks = FLASHMMU_BLOCKS(omap_objects[objid].size);
-    for(i = 0; blocks; i++) {
-      blocks >>= 1;
-    }
-    if(i > 3) {
-      panic("omap_objfree");
-    }
-
-    // set free pointer
-    l = omap_pool_list_new();
-    l->p = flashmmu_objcache + (omap_objects[objid].cache_offset << 9);
-
-    // push free list
-    l->next = omap_objcache_pool[i];
-    omap_objcache_pool[i] = l;
+  if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
+    omap_objcache_free(omap_objects[objid].cache_offset, omap_objects[objid].size);
   }
 
   // free table entry
   omap_objects[objid].flags = 0;
+  omap_objects[objid].buf_index = 0;
+  omap_objects[objid].cache_offset = 0;
+  omap_objects[objid].ref = 0;
 
   // free Flash
-  kfree(omap_flash[objid]);
-  omap_flash[objid] = 0;
+  //kfree(omap_flash[objid]);
+  //omap_flash[objid] = 0;
 }
 
 void
 omap_pgfault(uint objid)
 {
+  struct buf *b;
   char *p;
+  uint i;
+  uint victim;
 
   // find free area
-  p = omap_objcache_search(omap_objects[objid].size);
+  p = omap_objcache_alloc(omap_objects[objid].size);
 
   if(p == NULL) {
     // refill pagebuf
-    panic("omap_pgfault full objcache");
-    /*
-    if(omap_pagebuf[i] | FLASUMMU_FLAGS_DIRTYBUF) {
-      // writeback
-      memcpy(FLASHMMU_OBJCACHE_OBJ(flashmmu_objcache, omap_objects[objid].cache_offset),
-             ,
-             victim->size);
-      FLASHMMU_PAGEBUF_OBJ(flashmmu_pagebuf, omap_objects[objid].buf_index);
-    }
-    */
+    do {
+      if(omap_victim_next >= FLASHMMU_OBJ_MAX) {
+        omap_victim_next = 0;
+      }
+
+      if((omap_objects[omap_victim_next].flags & FLASHMMU_FLAGS_VALID) &&
+         (omap_objects[omap_victim_next].flags & FLASHMMU_FLAGS_OBJCACHE) &&
+         !(omap_objects[omap_victim_next].flags & FLASHMMU_FLAGS_PAGEBUF)) {
+        // hit
+        victim = omap_victim_next;
+
+        if(omap_objects[victim].flags & FLASHMMU_FLAGS_DIRTY) {
+          for(i = 0; i < FLASHMMU_BLOCKS(omap_objects[victim].size); i++) {
+            b = bread(OMAP_FLASH_DEV, OMAP_FLASH_OFFSET + FLASHMMU_SECTOR(victim) + i);
+            memmove(b->data, flashmmu_objcache + ((omap_objects[victim].cache_offset + i) << 9), 512);
+            bwrite(b);
+            brelse(b);
+          }
+        }
+
+        omap_objects[victim].flags &= ~(FLASHMMU_FLAGS_OBJCACHE | FLASHMMU_FLAGS_DIRTY);
+        omap_objcache_free(omap_objects[victim].cache_offset, omap_objects[victim].size);
+        //cprintf("IN %x OUT %x\n", objid, victim);
+      }
+
+      // miss
+      omap_victim_next++;
+    } while(!(p = omap_objcache_alloc(omap_objects[objid].size)));
   }
 
-  // copy to RAM object cache
-  memmove(p, omap_flash[objid], omap_objects[objid].size);
   omap_objects[objid].cache_offset = (uint)(p - flashmmu_objcache) >> 9;
+
+  // copy to RAM object cache
+  for(i = 0; i < FLASHMMU_BLOCKS(omap_objects[objid].size); i++) {
+    b = bread(OMAP_FLASH_DEV, OMAP_FLASH_OFFSET + FLASHMMU_SECTOR(objid) + i);
+    memmove(p + (512 * i), b->data, 512);
+    brelse(b);
+  }
+
   omap_objects[objid].flags |= FLASHMMU_FLAGS_OBJCACHE;
 }

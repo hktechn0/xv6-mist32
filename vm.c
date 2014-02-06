@@ -181,9 +181,6 @@ inituvm(pde_t *pgdir, char *init, uint sz)
   memset(mem, 0, PGSIZE);
   mappages(pgdir, 0, PGSIZE, v2p(mem), PTE_PP_RWRW | PTE_EX);
   memmove(mem, init, sz);
-
-  // Initialize object memory
-  omap_init();
 }
 
 // Load a program segment into pgdir.  addr must be page-aligned
