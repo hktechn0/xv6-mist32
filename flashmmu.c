@@ -71,11 +71,11 @@ omap_slab_sort(struct flashmmu_pool *list)
   a = list;
   b = list->next->next;
 
-  while(b) {
+  while(b != NULL) {
     a = a->next;
     b = b->next;
 
-    if(b->next) {
+    if(b != NULL) {
       b = b->next;
     }
   }
@@ -163,15 +163,15 @@ omap_slab_make(uint pool)
         }
 
         // is continuous free area?
-        if(slab->p + ((1 << (i + 1)) << 8) == slab->next->p) {
+        if((char *)slab->p + ((1 << (i + 1)) << 8) == (char *)slab->next->p) {
           slab2 = slab->next;
+          slab2->p = slab->p;
 
           slab->p = slab2->next->p;
           slab->next = slab2->next->next;
           omap_pool_list_release(slab2->next);
 
           // link big slab
-          slab2->p = slab->p;
           slab2->next = omap_objcache_pool[i + 1];
           omap_objcache_pool[i + 1] = slab2;
         }
