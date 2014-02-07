@@ -406,7 +406,7 @@ omap_alloc(int size)
 {
   pte_t *pte;
   uint objid;
-  char *p;
+  char *addr;
 
   if(size <= 0)
     return -1;
@@ -414,15 +414,16 @@ omap_alloc(int size)
   objid = omap_objalloc(size);
 
   // mappages
-  for(p = (char *)0x80000000 - PGSIZE; ; p -= PGSIZE) {
-    pte = walkpgdir(proc()->pgdir, p, 0);
-    if(!(*pte & PTE_V)) {
-      mappages(proc()->pgdir, p, PGSIZE, FLASHMMU_ADDR(objid), PTE_V | PTE_OBJ | PTE_PP_RWRW);
-      break;
-    }
+  addr = (char *)0x80000000 - FLASHMMU_SIZE + FLASHMMU_ADDR(objid);
+  pte = walkpgdir(proc()->pgdir, addr, 0);
+
+  if(*pte & PTE_V) {
+    panic("omap_alloc remap");
   }
 
-  return (int)p;
+  mappages(proc()->pgdir, addr, PGSIZE, FLASHMMU_ADDR(objid), PTE_V | PTE_OBJ | PTE_PP_RWRW);
+
+  return (int)addr;
 }
 
 int
