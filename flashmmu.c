@@ -9,18 +9,16 @@
 #include "flashmmu.h"
 
 // mist32 Flash MMU hardware managed area
-char *flashmmu_pagebuf;
-char *flashmmu_objcache;
-// pagebuffer entries
-volatile uint *omap_pagebuf;
+static char *flashmmu_pagebuf;
+static char *flashmmu_objcache;
 // object table
-struct flashmmu_object *omap_objects;
+static struct flashmmu_object *omap_objects;
 
 // Flash MMU variables
-uint omap_objects_next;
-uint omap_victim_next;
-struct flashmmu_pool *omap_objcache_pool[4] = { NULL };
-struct flashmmu_pool *omap_pool_freelist = NULL;
+static uint omap_objects_next;
+static uint omap_victim_next;
+static struct flashmmu_pool *omap_objcache_pool[4] = { NULL };
+static struct flashmmu_pool *omap_pool_freelist = NULL;
 
 #define OMAP_FLASH_DEV 1
 #define OMAP_FLASH_OFFSET ((1024 * 1024) >> 9)
@@ -276,9 +274,7 @@ omap_init(void)
   flashmmu_objcache = (char *)flashmmu_pagebuf + FLASHMMU_PAGEBUF_SIZE;
 
   // init tables
-  omap_pagebuf = (uint *)((char *)flashmmu_objcache + FLASHMMU_OBJCACHE_SIZE);
-  omap_objects = (struct flashmmu_object *)((char *)omap_pagebuf + (FLASHMMU_PAGEBUF_MAX * sizeof(uint)));
-  memset((void *)omap_pagebuf, 0, FLASHMMU_PAGEBUF_MAX * sizeof(uint));
+  omap_objects = (struct flashmmu_object *)((char *)flashmmu_objcache + FLASHMMU_OBJCACHE_SIZE);
   memset(omap_objects, 0, FLASHMMU_OBJ_MAX * sizeof(struct flashmmu_object));
 
   // init slab
@@ -328,7 +324,6 @@ omap_objalloc(int size)
 
   // set table
   omap_objects[objid].size = size;
-  omap_objects[objid].ref = 0;
   omap_objects[objid].flags = FLASHMMU_FLAGS_VALID;
 
   return objid;
@@ -342,9 +337,9 @@ omap_objfree(uint objid)
   }
 
   // free Page Buffer
-  if(omap_objects[objid].flags & FLASHMMU_FLAGS_PAGEBUF) {
-    omap_pagebuf[omap_objects[objid].buf_index] = 0;
-  }
+  //if(omap_objects[objid].flags & FLASHMMU_FLAGS_PAGEBUF) {
+  //  omap_pagebuf[omap_objects[objid].buf_index] = 0;
+  //}
 
   // free RAM object cache
   if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
@@ -353,9 +348,7 @@ omap_objfree(uint objid)
 
   // free table entry
   omap_objects[objid].flags = 0;
-  omap_objects[objid].buf_index = 0;
   omap_objects[objid].cache_offset = 0;
-  omap_objects[objid].ref = 0;
 
   // free Flash
   //kfree(omap_flash[objid]);
