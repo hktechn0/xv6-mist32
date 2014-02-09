@@ -170,6 +170,8 @@ void            clearpteu(pde_t *pgdir, char *uva);
 void            pgfault(uint vaddr);
 int             omap_alloc(int size);
 int             omap_free(uint vaddr);
+pde_t*          omap_pte(uint objid);
+
 
 // gci.c
 void            gciinit(void);

@@ -16,6 +16,10 @@ static struct flashmmu_object *omap_objects;
 
 // Flash MMU variables
 static uint omap_objects_next;
+static uint omap_pagebuf_next;
+
+// page buffer entry
+static uint omap_pagebuf[FLASHMMU_OBJ_MAX] = { 0 };
 
 // RAM Object Cache pool
 static struct flashmmu_pool *omap_objcache_pool[4] = { NULL };
@@ -317,6 +321,7 @@ omap_init(void)
   char *p;
 
   omap_objects_next = 0;
+  omap_pagebuf_next = 0;
 
   // set cache area
   flashmmu_pagebuf = (char *)FMMUVIRT;
@@ -381,14 +386,21 @@ omap_objalloc(int size)
 void
 omap_objfree(uint objid)
 {
+  uint i;
+
   if(!(omap_objects[objid].flags & FLASHMMU_FLAGS_VALID)) {
     panic("omap_objfree");
   }
 
   // free Page Buffer
-  //if(omap_objects[objid].flags & FLASHMMU_FLAGS_PAGEBUF) {
-  //  omap_pagebuf[omap_objects[objid].buf_index] = 0;
-  //}
+  if(omap_objects[objid].flags & FLASHMMU_FLAGS_PAGEBUF) {
+    for(i = 0; i < FLASHMMU_PAGEBUF_MAX; i++) {
+      if(FLASHMMU_OBJID(omap_pagebuf[i]) == objid) {
+        omap_pagebuf[i] = 0;
+        break;
+      }
+    }
+  }
 
   // free RAM object cache
   if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
@@ -411,6 +423,17 @@ omap_pgfault(uint objid)
   char *p;
   uint i, victim_id;
   struct flashmmu_pool *l, *victim;
+
+  char *page;
+  uint entry;
+  pte_t *pte;
+
+  if(omap_objects[objid].flags & FLASHMMU_FLAGS_PAGEBUF) {
+    panic("omap_pgfault pagebuf?");
+  }
+  else if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
+    goto pagebuf;
+  }
 
   // find free area
   p = omap_objcache_alloc(objid);
@@ -458,6 +481,8 @@ omap_pgfault(uint objid)
 
       victim = victim->next;
 
+      //cprintf("objcache OUT %x ", victim_id);
+
       // free objcache and alloc
       omap_objcache_free(victim_id);
       p = omap_objcache_alloc(objid);
@@ -469,5 +494,49 @@ omap_pgfault(uint objid)
     b = bread(OMAP_FLASH_DEV, OMAP_FLASH_OFFSET + FLASHMMU_SECTOR(objid) + i);
     memmove(p + (512 * i), b->data, 512);
     brelse(b);
+  }
+
+pagebuf:
+  page = flashmmu_pagebuf + (omap_pagebuf_next << 12);
+  entry = omap_pagebuf[omap_pagebuf_next];
+
+  if(entry & FLASHMMU_FLAGS_VALID) {
+    // victim writeback
+    victim_id = FLASHMMU_OBJID(entry);
+    pte = omap_pte(victim_id);
+
+    if(*pte & PTE_D) {
+      memmove(flashmmu_objcache + (omap_objects[victim_id].cache_offset << 9), page,
+              omap_objects[victim_id].size);
+      omap_objects[victim_id].flags |= FLASHMMU_FLAGS_DIRTY;
+    }
+
+    if(*pte & PTE_R) {
+      omap_objects[victim_id].flags |= FLASHMMU_FLAGS_ACCESS;
+    }
+
+    //cprintf("pagebuf OUT %x %x ", victim_id, *(uint *)page);
+
+    // drop flags
+    omap_objects[victim_id].flags &= ~FLASHMMU_FLAGS_PAGEBUF;
+    *pte &= ~(0xfffff000 | PTE_V | PTE_R | PTE_D);
+  }
+
+  // copy
+  memmove(page, flashmmu_objcache + (omap_objects[objid].cache_offset << 9),
+          omap_objects[objid].size);
+
+  // PTE
+  pte = omap_pte(objid);
+  *pte = (FMMUSTART + (omap_pagebuf_next << 12)) | PTE_V | (*pte & 0xfff);
+
+  //cprintf("IN %x %x\n", objid, *(uint *)page);
+
+  omap_objects[objid].flags |= FLASHMMU_FLAGS_PAGEBUF;
+  omap_pagebuf[omap_pagebuf_next] = FLASHMMU_ADDR(objid) | FLASHMMU_FLAGS_VALID;
+
+  // increment
+  if(++omap_pagebuf_next >= FLASHMMU_PAGEBUF_MAX) {
+    omap_pagebuf_next = 0;
   }
 }

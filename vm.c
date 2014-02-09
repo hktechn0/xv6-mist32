@@ -256,7 +256,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       pa = PTE_ADDR(*pte);
 
       if(*pte & PTE_OBJ)
-        omap_objfree(FLASHMMU_OBJID(pa));
+        omap_free(a);
       else {
         if(pa == 0)
           panic("kfree");
@@ -379,6 +379,15 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 // FLASH MMU ALLOC
 //
 
+pte_t *
+omap_pte(uint objid)
+{
+  char *addr;
+
+  addr = (char *)0x80000000 - FLASHMMU_SIZE + FLASHMMU_ADDR(objid);
+  return walkpgdir(proc()->pgdir, addr, 0);
+}
+
 void
 pgfault(uint vaddr)
 {
@@ -392,12 +401,12 @@ pgfault(uint vaddr)
   pte = walkpgdir(proc()->pgdir, (void *)vaddr, 0);
 
   // is valid object?
-  if(!(*pte & PTE_V) || !(*pte & PTE_OBJ)) {
+  if(!(*pte & PTE_OBJ)) {
     cprintf("unexpected page fault: %x %x\n", vaddr, *pte);
     panic("pgfault");
   }
 
-  objid = FLASHMMU_OBJID(PTE_ADDR(*pte));
+  objid = FLASHMMU_OBJID(vaddr - (0x80000000 - FLASHMMU_SIZE));
   omap_pgfault(objid);
 }
 
@@ -421,7 +430,7 @@ omap_alloc(int size)
     panic("omap_alloc remap");
   }
 
-  *pte = FLASHMMU_ADDR(objid) | PTE_V | PTE_OBJ | PTE_PP_RWRW;
+  *pte = PTE_OBJ | PTE_PP_RWRW;
 
   return (int)addr;
 }
@@ -434,8 +443,8 @@ omap_free(uint vaddr)
 
   pte = walkpgdir(proc()->pgdir, (void *)vaddr, 0);
 
-  if((*pte & PTE_V) && (*pte & PTE_OBJ)) {
-    objid = FLASHMMU_OBJID(PTE_ADDR(*pte));
+  if(*pte & PTE_OBJ) {
+    objid = FLASHMMU_OBJID(vaddr - (0x80000000 - FLASHMMU_SIZE));
     omap_objfree(objid);
 
     // unmappage
