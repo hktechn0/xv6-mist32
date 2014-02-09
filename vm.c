@@ -413,15 +413,15 @@ omap_alloc(int size)
 
   objid = omap_objalloc(size);
 
-  // mappages
+  // mappage
   addr = (char *)0x80000000 - FLASHMMU_SIZE + FLASHMMU_ADDR(objid);
-  pte = walkpgdir(proc()->pgdir, addr, 0);
+  pte = walkpgdir(proc()->pgdir, addr, 1);
 
   if(*pte & PTE_V) {
     panic("omap_alloc remap");
   }
 
-  mappages(proc()->pgdir, addr, PGSIZE, FLASHMMU_ADDR(objid), PTE_V | PTE_OBJ | PTE_PP_RWRW);
+  *pte = FLASHMMU_ADDR(objid) | PTE_V | PTE_OBJ | PTE_PP_RWRW;
 
   return (int)addr;
 }
@@ -438,7 +438,7 @@ omap_free(uint vaddr)
     objid = FLASHMMU_OBJID(PTE_ADDR(*pte));
     omap_objfree(objid);
 
-    // unmappages
+    // unmappage
     *pte = 0;
   }
   else {
