@@ -48,9 +48,17 @@ memmove(void *dst, const void *src, uint n)
     d += n;
     while(n-- > 0)
       *--d = *--s;
-  } else
+  } else if((int)s&3 || (int)d&3 || n&3)
     while(n-- > 0)
       *d++ = *s++;
+  else {
+    const uint *ss = (const uint *)s;
+    uint *dd = (uint *)d;
+    while(n > 0) {
+      n-=4;
+      *dd++ = *ss++;
+    }
+  }
 
   return dst;
 }
