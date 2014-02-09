@@ -32,7 +32,7 @@
 #define FLASHMMU_FLAGS_VALID 0x1
 #define FLASHMMU_FLAGS_OBJCACHE 0x2
 #define FLASHMMU_FLAGS_PAGEBUF 0x4 /* deprecated */
-//#define FLASHMMU_FLAGS_ 0x8
+#define FLASHMMU_FLAGS_ACCESS 0x8
 #define FLASHMMU_FLAGS_DIRTY 0x10
 #define FLASHMMU_FLAGS_DIRTYBUF 0x20 /* FIXME: dirtybuf flag should have pagebuf tag. */
 
@@ -52,7 +52,10 @@ struct flashmmu_object
 struct flashmmu_pool
 {
   struct flashmmu_pool *next;
-  void *p;
+  union {
+    void *p;
+    uint objid;
+  };
 };
 
 void omap_init(void);

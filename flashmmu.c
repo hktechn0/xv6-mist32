@@ -16,8 +16,13 @@ static struct flashmmu_object *omap_objects;
 
 // Flash MMU variables
 static uint omap_objects_next;
-static uint omap_victim_next;
+
+// RAM Object Cache pool
 static struct flashmmu_pool *omap_objcache_pool[4] = { NULL };
+static struct flashmmu_pool *omap_objcache_used = NULL;
+static struct flashmmu_pool *omap_objcache_used_last = NULL;
+
+// list element free pool
 static struct flashmmu_pool *omap_pool_freelist = NULL;
 
 #define OMAP_FLASH_DEV 1
@@ -185,11 +190,13 @@ omap_slab_make(uint pool)
 }
 
 static inline void *
-omap_objcache_alloc(uint size)
+omap_objcache_alloc(uint objid)
 {
-  uint i;
+  uint i, size;
+  char *p;
   struct flashmmu_pool *l;
-  void *p;
+
+  size = omap_objects[objid].size;
 
   if(!size) {
     // zero size object
@@ -220,19 +227,34 @@ omap_objcache_alloc(uint size)
 
   // pop slab
   l = omap_objcache_pool[i];
-  omap_objcache_pool[i] = l->next;
   p = l->p;
+  omap_objcache_pool[i] = l->next;
 
-  omap_pool_list_release(l);
+  l->objid = objid;
+  l->next = NULL;
+
+  if(omap_objcache_used == NULL) {
+    omap_objcache_used = l;
+    omap_objcache_used_last = l;
+  }
+  else {
+    omap_objcache_used_last->next = l;
+    omap_objcache_used_last = l;
+  }
+
+  omap_objects[objid].flags |= FLASHMMU_FLAGS_OBJCACHE;
+  omap_objects[objid].cache_offset = (uint)(p - flashmmu_objcache) >> 9;
 
   return p;
 }
 
 static inline void
-omap_objcache_free(uint cache_offset, uint size)
+omap_objcache_free(uint objid)
 {
-  uint i;
-  struct flashmmu_pool *l;
+  uint i, size;
+  struct flashmmu_pool *l, *pl;
+
+  size = omap_objects[objid].size;
 
   if(!size) {
     // zero size object
@@ -251,11 +273,39 @@ omap_objcache_free(uint cache_offset, uint size)
   else
     panic("omap_objcache_free");
 
-  // set free pointer
-  l = omap_pool_list_new();
-  l->p = flashmmu_objcache + (cache_offset << 9);
+  // find in used pool
+  l = omap_objcache_used;
+  pl = NULL;
+  while(l) {
+    if(l->objid == objid) {
+      break;
+    }
+    pl = l;
+    l = l->next;
+  }
+
+  if(l == NULL) {
+    panic("omap_objcache_free notfound");
+  }
+
+  // drop from used pool
+  if(pl == NULL) {
+    // head
+    omap_objcache_used = l->next;
+  }
+  else {
+    pl->next = l->next;
+  }
+
+  if(l->next == NULL) {
+    // tail
+    omap_objcache_used_last = pl;
+  }
+
+  omap_objects[objid].flags &= ~FLASHMMU_FLAGS_OBJCACHE;
 
   // push slab to free pool
+  l->p = flashmmu_objcache + (omap_objects[objid].cache_offset << 9);
   l->next = omap_objcache_pool[i];
   omap_objcache_pool[i] = l;
 }
@@ -267,7 +317,6 @@ omap_init(void)
   char *p;
 
   omap_objects_next = 0;
-  omap_victim_next = 0;
 
   // set cache area
   flashmmu_pagebuf = (char *)FMMUVIRT;
@@ -343,7 +392,7 @@ omap_objfree(uint objid)
 
   // free RAM object cache
   if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
-    omap_objcache_free(omap_objects[objid].cache_offset, omap_objects[objid].size);
+    omap_objcache_free(objid);
   }
 
   // free table entry
@@ -360,45 +409,60 @@ omap_pgfault(uint objid)
 {
   struct buf *b;
   char *p;
-  uint i;
-  uint victim;
+  uint i, victim_id;
+  struct flashmmu_pool *l, *victim;
 
   // find free area
-  p = omap_objcache_alloc(omap_objects[objid].size);
+  p = omap_objcache_alloc(objid);
 
   if(p == NULL) {
+    // head of used list == oldest
+    victim = omap_objcache_used;
+
     // refill pagebuf
     do {
-      if(omap_victim_next >= FLASHMMU_OBJ_MAX) {
-        omap_victim_next = 0;
+      if(victim == NULL) {
+        panic("omap_pgfault");
       }
 
-      if((omap_objects[omap_victim_next].flags & FLASHMMU_FLAGS_VALID) &&
-         (omap_objects[omap_victim_next].flags & FLASHMMU_FLAGS_OBJCACHE) &&
-         !(omap_objects[omap_victim_next].flags & FLASHMMU_FLAGS_PAGEBUF)) {
-        // hit
-        victim = omap_victim_next;
+      victim_id = victim->objid;
 
-        if(omap_objects[victim].flags & FLASHMMU_FLAGS_DIRTY) {
-          for(i = 0; i < FLASHMMU_BLOCKS(omap_objects[victim].size); i++) {
-            b = bread(OMAP_FLASH_DEV, OMAP_FLASH_OFFSET + FLASHMMU_SECTOR(victim) + i);
-            memmove(b->data, flashmmu_objcache + ((omap_objects[victim].cache_offset + i) << 9), 512);
-            bwrite(b);
-            brelse(b);
-          }
+      if(omap_objects[victim_id].flags & (FLASHMMU_FLAGS_ACCESS | FLASHMMU_FLAGS_PAGEBUF)) {
+        // LRU
+        l = victim->next;
+
+        victim->objid = l->objid;
+        victim->next = l->next;
+
+        l->objid = victim_id;
+        l->next = NULL;
+        omap_objcache_used_last->next = l;
+        omap_objcache_used_last = l;
+
+        victim = omap_objcache_used;
+        omap_objects[victim_id].flags &= ~FLASHMMU_FLAGS_ACCESS;
+        continue;
+      }
+
+      // victim writeback
+      if(omap_objects[victim_id].flags & FLASHMMU_FLAGS_DIRTY) {
+        for(i = 0; i < FLASHMMU_BLOCKS(omap_objects[victim_id].size); i++) {
+          b = bread(OMAP_FLASH_DEV, OMAP_FLASH_OFFSET + FLASHMMU_SECTOR(victim_id) + i);
+          memmove(b->data, flashmmu_objcache + ((omap_objects[victim_id].cache_offset + i) << 9), 512);
+          bwrite(b);
+          brelse(b);
         }
 
-        omap_objects[victim].flags &= ~(FLASHMMU_FLAGS_OBJCACHE | FLASHMMU_FLAGS_DIRTY);
-        omap_objcache_free(omap_objects[victim].cache_offset, omap_objects[victim].size);
-        //cprintf("IN %x OUT %x\n", objid, victim);
+        omap_objects[victim_id].flags &= ~(FLASHMMU_FLAGS_DIRTY | FLASHMMU_FLAGS_ACCESS);
       }
 
-      // miss
-      omap_victim_next++;
-    } while(!(p = omap_objcache_alloc(omap_objects[objid].size)));
-  }
+      victim = victim->next;
 
-  omap_objects[objid].cache_offset = (uint)(p - flashmmu_objcache) >> 9;
+      // free objcache and alloc
+      omap_objcache_free(victim_id);
+      p = omap_objcache_alloc(objid);
+    } while(p == NULL);
+  }
 
   // copy to RAM object cache
   for(i = 0; i < FLASHMMU_BLOCKS(omap_objects[objid].size); i++) {
@@ -406,6 +470,4 @@ omap_pgfault(uint objid)
     memmove(p + (512 * i), b->data, 512);
     brelse(b);
   }
-
-  omap_objects[objid].flags |= FLASHMMU_FLAGS_OBJCACHE;
 }
