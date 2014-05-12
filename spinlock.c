@@ -36,7 +36,7 @@ acquire(struct spinlock *lk)
 
   // Record info about lock acquisition for debugging.
   lk->cpu = cpu();
-  getcallerpcs(&lk, lk->pcs);
+  //getcallerpcs(&lk, lk->pcs);
 }
 
 // Release the lock.
