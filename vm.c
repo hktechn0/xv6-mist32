@@ -243,6 +243,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
   pte_t *pte;
   uint a, pa;
+  uint objid;
 
   if(newsz >= oldsz)
     return oldsz;
@@ -252,17 +253,18 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
     pte = walkpgdir(pgdir, (char*)a, 0);
     if(!pte)
       a += (NPTENTRIES - 1) * PGSIZE;
+    else if(*pte & PTE_OBJ) {
+      objid = FLASHMMU_OBJID(a - (0x80000000 - FLASHMMU_SIZE));
+      omap_objfree(objid);
+      *pte = 0;
+    }
     else if((*pte & PTE_V) != 0){
       pa = PTE_ADDR(*pte);
 
-      if(*pte & PTE_OBJ)
-        omap_free(a);
-      else {
-        if(pa == 0)
-          panic("kfree");
-        char *v = p2v(pa);
-        kfree(v);
-      }
+      if(pa == 0)
+        panic("kfree");
+      char *v = p2v(pa);
+      kfree(v);
 
       *pte = 0;
     }

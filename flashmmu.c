@@ -31,6 +31,7 @@ static struct flashmmu_pool *omap_pool_freelist = NULL;
 
 // benchmark
 static uint omap_pagefault = 0;
+static uint omap_objcache_hit = 0, omap_flash_hit = 0;
 
 #define OMAP_FLASH_DEV 1
 #define OMAP_FLASH_OFFSET ((1024 * 1024) >> 9)
@@ -405,6 +406,8 @@ omap_objfree(uint objid)
     }
   }
 
+  cprintf("Hit objcache %d flash %d\n", omap_objcache_hit, omap_flash_hit);
+
   // free RAM object cache
   if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
     omap_objcache_free(objid);
@@ -438,8 +441,11 @@ omap_pgfault(uint objid)
     panic("omap_pgfault pagebuf?");
   }
   else if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
+    omap_objcache_hit++;
     goto pagebuf;
   }
+
+  omap_flash_hit++;
 
   // find free area
   p = omap_objcache_alloc(objid);
