@@ -176,7 +176,7 @@ main(int argc, char *argv[])
   char c[100];
 
   gets(c, 100);
-  test_seq(atoi(c));
+  //test_seq(atoi(c));
   test_rand(atoi(c));
 
   exit();

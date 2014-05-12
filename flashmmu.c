@@ -25,6 +25,9 @@ static struct flashmmu_pool *omap_objcache_used_last = NULL;
 // list element free pool
 static struct flashmmu_pool *omap_pool_freelist = NULL;
 
+// benchmark
+static uint omap_pagefault = 0;
+
 #define OMAP_FLASH_DEV 1
 #define OMAP_FLASH_OFFSET ((1024 * 1024) >> 9)
 
@@ -411,6 +414,13 @@ omap_pgfault(uint objid)
   char *p;
   uint i, victim_id;
   struct flashmmu_pool *l, *victim;
+
+  omap_pagefault++;
+  cprintf("omap_pagefault: %d\n", omap_pagefault);
+
+  if(omap_objects[objid].flags & FLASHMMU_FLAGS_OBJCACHE) {
+    panic("objcache");
+  }
 
   // find free area
   p = omap_objcache_alloc(objid);
