@@ -426,7 +426,7 @@ omap_pgfault(uint objid)
   p = omap_objcache_alloc(objid);
 
   if(p == NULL) {
-    // head of used list == oldest
+    // head of used list == oldest object
     victim = omap_objcache_used;
 
     // refill pagebuf
@@ -437,19 +437,21 @@ omap_pgfault(uint objid)
 
       victim_id = victim->objid;
 
+      // victim should not been recently accessed
       if(omap_objects[victim_id].flags & (FLASHMMU_FLAGS_ACCESS | FLASHMMU_FLAGS_PAGEBUF)) {
-        // LRU
         l = victim->next;
 
+        // victim <= victim->next
         victim->objid = l->objid;
         victim->next = l->next;
 
+        // victim links to tail
         l->objid = victim_id;
         l->next = NULL;
         omap_objcache_used_last->next = l;
         omap_objcache_used_last = l;
 
-        victim = omap_objcache_used;
+        // drop FLAGS_ACCESS
         omap_objects[victim_id].flags &= ~FLASHMMU_FLAGS_ACCESS;
         continue;
       }
