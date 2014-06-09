@@ -402,7 +402,7 @@ pgfault(uint vaddr)
 
   // is valid object?
   if(!(*pte & PTE_OBJ)) {
-    cprintf("unexpected page fault: %x %x\n", vaddr, *pte);
+    cprintf("unexpected page fault: 0x%x (PTE: %x) at %x\n", vaddr, *pte, proc()->tf->ppcr);
     panic("pgfault");
   }
 
