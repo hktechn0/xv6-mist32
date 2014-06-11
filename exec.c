@@ -8,8 +8,8 @@
 #include "elf.h"
 
 #define XV6_MRUBY_MRUBY
-//#define XV6_MRUBY_MIRB
-//#define XV6_MRUBY_MRBTEST
+#define XV6_MRUBY_MIRB
+#define XV6_MRUBY_MRBTEST
 
 int execkb(char *path, char **argv);
 #ifdef XV6_MRUBY_MRUBY
