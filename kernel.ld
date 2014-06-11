@@ -7,6 +7,21 @@ ENTRY(_start)
 
 SECTIONS
 {
+	/* mruby section places tail of file */
+	. = 0x80100000;
+	. = ALIGN(0x400000); /* 4MB, next big page */
+
+	.mruby :  {
+		PROVIDE(_binary_mruby_start = .);
+		mruby.elf(.data)
+		PROVIDE(_binary_mirb_start = .);
+		mirb.elf(.data)
+		PROVIDE(_binary_mrbtest_start = .);
+		mrbtest.elf(.data)
+	}
+	
+	PROVIDE(endmruby = .);
+
 	/* Link the kernel at this address: "." means the current address */
         /* Must be equal to KERNLINK */
 	. = 0x80100000;
