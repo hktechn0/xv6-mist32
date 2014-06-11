@@ -27,8 +27,8 @@ OBJS = \
 	vectors.o\
 	vm.o\
 
-
-MRUBY = mruby mirb mrbtest
+# mruby files
+MRUBYBIN = mruby.elf mirb.elf mrbtest.elf
 MRUBY_BENCH = fib39.rb bm_so_lists.rb ao-render.rb
 
 # Cross-compiling
@@ -85,8 +85,8 @@ initcode: initcode.S
 	$(OBJCOPY) -S -O binary initcode.out initcode
 	$(OBJDUMP) -S initcode.o > initcode.asm
 
-kernel: $(OBJS) entry.o initcode kernel.ld $(MRUBY)
-	$(LD) $(LDFLAGS) -T kernel.ld -o kernel entry.o $(OBJS) -b binary initcode $(LDMRUBY)
+kernel: $(OBJS) entry.o initcode kernel.ld $(MRUBYBIN)
+	$(LD) $(LDFLAGS) -T kernel.ld -o kernel entry.o $(OBJS) -b binary initcode
 	$(OBJDUMP) -S kernel > kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
 
@@ -97,8 +97,8 @@ kernel: $(OBJS) entry.o initcode kernel.ld $(MRUBY)
 # great for testing the kernel on real hardware without
 # needing a scratch disk.
 MEMFSOBJS = $(filter-out ide.o,$(OBJS)) memide.o
-kernelmemfs: $(MEMFSOBJS) entry.o initcode kernel.ld fs.img $(MRUBY)
-	$(LD) $(LDFLAGS) -T kernel.ld -o kernelmemfs entry.o  $(MEMFSOBJS) -b binary initcode $(LDMRUBY) fs.img
+kernelmemfs: $(MEMFSOBJS) entry.o initcode kernel.ld fs.img $(MRUBYBIN)
+	$(LD) $(LDFLAGS) -T kernel.ld -o kernelmemfs entry.o  $(MEMFSOBJS) -b binary initcode fs.img
 	$(OBJDUMP) -S kernelmemfs > kernelmemfs.asm
 	$(OBJDUMP) -t kernelmemfs | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernelmemfs.sym
 
@@ -122,14 +122,14 @@ _forktest: forktest.o $(ULIB)
 	$(OBJDUMP) -S _forktest > forktest.asm
 
 # mruby
-LDMRUBY = -b binary mruby -b binary mirb -b binary mrbtest
-LDMRUBY = -b binary mruby
-mruby:
-	cp ../mruby/build/mist32-xv6/bin/mruby .
-mirb:
-	cp ../mruby/build/mist32-xv6/bin/mirb .
+MRUBYDIR = ../mruby
+mruby mirb:
+	cp $(MRUBYDIR)/build/mist32-xv6/bin/$@ .
 mrbtest:
-	cp ../mruby/build/mist32-xv6/test/mrbtest .
+	cp $(MRUBYDIR)/build/mist32-xv6/test/$@ .
+
+$(MRUBYBIN): $(MRUBYBIN:.elf=)
+	$(LD) -s -o $@ -b binary $(@:.elf=)
 
 mkfs: mkfs.c fs.h
 	gcc -Werror -Wall -o mkfs mkfs.c
@@ -167,4 +167,4 @@ clean:
 	*.o *.d *.asm *.sym vectors.S bootblock entryother \
 	initcode initcode.out kernel xv6.img fs.img kernelmemfs mkfs \
 	.gdbinit \
-	$(UPROGS) $(MRUBY)
+	$(UPROGS) $(MRUBYBIN) $(MRUBYBIN:.elf=)
