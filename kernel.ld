@@ -7,6 +7,12 @@ ENTRY(_start)
 
 SECTIONS
 {
+	. = 0x80000000;
+
+	.entry : AT(0) {
+	       entry.o(*)
+	}
+
 	/* Link the kernel at this address: "." means the current address */
         /* Must be equal to KERNLINK */
 	. = 0x80100000;

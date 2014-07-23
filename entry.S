@@ -36,4 +36,6 @@ entry:
 	wl16	rtmp, lo(main)
 	b	rtmp, #al
 
+.p2align 12
+.data
 .comm stack, KSTACKSIZE
