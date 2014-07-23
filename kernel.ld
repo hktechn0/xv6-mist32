@@ -7,6 +7,12 @@ ENTRY(_start)
 
 SECTIONS
 {
+	. = 0x80000000;
+
+	.entry : AT(0) {
+	       entry.o(*)
+	}
+
 	/* mruby section places tail of file */
 	. = 0x80100000;
 	. = ALIGN(0x400000); /* 4MB, next big page */

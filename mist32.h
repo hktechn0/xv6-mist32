@@ -39,6 +39,7 @@ srpdtr(void)
 static inline void
 srpdtw(uint val)
 {
+  asm volatile("srkpdtw %0" : : "r"(val));
   asm volatile("srpdtw %0" : : "r"(val));
 }
 
