@@ -25,6 +25,7 @@ entry:
 	;; Set page directory
 	lih	rtmp, hi(V2P_WO(entrypgdir))
 	wl16	rtmp, lo(V2P_WO(entrypgdir))
+	srkpdtw	rtmp
 	srpdtw	rtmp
 	;; Turn on paging.
 	srmmuw	2
