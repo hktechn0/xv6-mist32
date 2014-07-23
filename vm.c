@@ -111,7 +111,7 @@ static struct kmap {
   uint phys_end;
   int perm;
 } kmap[] = {
-  { (void*)KERNBASE, 0,             EXTMEM,    PTE_PP_RWXX},             // I/O space
+  { (void*)KERNBASE, 0,             EXTMEM,    PTE_PP_RWXX},             // Boot
   { (void*)KERNLINK, V2P(KERNLINK), V2P(data), PTE_PP_RDXX | PTE_EX},    // kern text+rodata
   { (void*)data,     V2P(data),     PHYSTOP,   PTE_PP_RWXX},             // kern data+memory
   { (void*)FMMUVIRT, FMMUSTART,     FMMUPBEND, PTE_PP_RWRW},             // Flash MMU PageBuffer
